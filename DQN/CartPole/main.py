@@ -24,7 +24,7 @@ virtual_display = Display(visible=0, size=(1400, 900))
 virtual_display.start()
 
 env = gym.make('CartPole-v0').unwrapped
-env = wrappers.Monitor(env, "../../tmp/CartPole-v0", force=True)
+env = wrappers.Monitor(env, "../../tmp/CartPole-v0", force=True, video_callable=lambda episode_id: episode_id%100==0)
 
 #set up matplotlib
 is_ipython='inline' in matplotlib.get_backend()
@@ -197,19 +197,20 @@ def optimize_model():
 
 
 writer = SummaryWriter()
-num_episodes = 30000
+num_episodes = 500
 for i_episode in range(num_episodes):
     env.reset()
     last_screen = get_screen()
     current_screen = get_screen()
     state = current_screen - last_screen
-    total_reward = 0
+    avg_reward = 0.0
+    avg_loss = 0.0
     for t in count():
         action = select_action(state)
         _, reward, done, _ = env.step(action.item())
 
         reward = torch.tensor([reward],device=device)
-        total_reward += reward
+        avg_reward += reward
 
 
         last_screen = current_screen
@@ -223,13 +224,16 @@ for i_episode in range(num_episodes):
         state = next_state
 
         loss = optimize_model()
+        if loss != None:
+            avg_loss += loss
+
         if done:
             # episode_durations.append(t+1)
             # plot_durations()
-            if loss != None and total_reward != None:
-                writer.add_scalar("Loss", loss, i_episode)
-                writer.add_scalar("Reward", total_reward, i_episode)
-            print("Episode: {}, reward: {}, time_step: {}".format(i_episode,total_reward.item(),t))
+            if avg_loss != None and avg_reward != None:
+                writer.add_scalar("Loss", avg_loss/t, i_episode)
+                writer.add_scalar("Reward", avg_reward.item()/t, i_episode)
+            print("Episode: {}, reward: {:.4f}, loss: {:.4f}, time_step: {}".format(i_episode,avg_reward.item()/t,avg_loss/t,t))
             break
 
     if i_episode % TARGET_UPDATE == 0:
