@@ -134,6 +134,7 @@ def select_action(state):
     global steps_done
     sample = random.random()
     eps_threshold = EPS_END + (EPS_START-EPS_END) * math.exp(-1 * steps_done / EPS_DECAY)
+    #概率衰减，先是随机select的概率大，更可能的explore，随着学习的进行，更偏向exploit
     steps_done += 1
     if sample > eps_threshold:
         with torch.no_grad():
@@ -147,20 +148,20 @@ def plot_durations():
     plt.figure(2)
     plt.clf()
     duration_t = torch.tensor(episode_durations, dtype=torch.float)
-    plt.title("Training...")
-    plt.xlabel('Episode')
-    plt.ylabel('Duration')
-    plt.plot(duration_t.numpy())
+    # plt.title("Training...")
+    # plt.xlabel('Episode')
+    # plt.ylabel('Duration')
+    # plt.plot(duration_t.numpy())
 
     if len(duration_t) >= 100:
         means = duration_t.unfold(0,100,1).mean(1).view(-1)
         means = torch.cat((torch.zeros(99),means))
         plt.plot(means.numpy())
 
-    plt.pause(0.001)
-    if is_ipython:
-        display.clear_output(wait=True)
-        display.display(plt.gcf())
+    # plt.pause(0.001)
+    # if is_ipython:
+    #     display.clear_output(wait=True)
+    #     display.display(plt.gcf())
 
 def optimize_model():
     if len(memory) < BATCH_SIZE:
@@ -184,15 +185,12 @@ def optimize_model():
     criterion = nn.SmoothL1Loss()
     loss = criterion(state_action_values, expected_state_action_values.unsqueeze(1))
 
-    loss_value = loss.detach().clone()
-
     optimizer.zero_grad()
     loss.backward()
     for param in policy_net.parameters():
         param.grad.data.clamp(-1,1)
     optimizer.step()
 
-    return loss_value.to("cpu")
 
 
 
@@ -203,14 +201,14 @@ for i_episode in range(num_episodes):
     last_screen = get_screen()
     current_screen = get_screen()
     state = current_screen - last_screen
-    avg_reward = 0.0
-    avg_loss = 0.0
+    # avg_reward = 0.0
+    # avg_loss = 0.0
     for t in count():
         action = select_action(state)
         _, reward, done, _ = env.step(action.item())
 
         reward = torch.tensor([reward],device=device)
-        avg_reward += reward
+        # avg_reward += reward
 
 
         last_screen = current_screen
@@ -223,17 +221,16 @@ for i_episode in range(num_episodes):
         memory.push(state, action, next_state, reward)
         state = next_state
 
-        loss = optimize_model()
-        if loss != None:
-            avg_loss += loss
+        optimize_model()
+
 
         if done:
             # episode_durations.append(t+1)
             # plot_durations()
-            if avg_loss != None and avg_reward != None:
-                writer.add_scalar("Loss", avg_loss/t, i_episode)
-                writer.add_scalar("Reward", avg_reward.item()/t, i_episode)
-            print("Episode: {}, reward: {:.4f}, loss: {:.4f}, time_step: {}".format(i_episode,avg_reward.item()/t,avg_loss/t,t))
+            # if avg_loss != None and avg_reward != None:
+            #     writer.add_scalar("Loss", avg_loss/t, i_episode)
+            writer.add_scalar("Reward", t+1, i_episode)
+            print("Episode: {}, reward: {}".format(i_episode,t))
             break
 
     if i_episode % TARGET_UPDATE == 0:
